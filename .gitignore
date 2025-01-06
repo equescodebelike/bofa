@@ -1,5 +1,7 @@
 # Miscellaneous
 *.class
+*.db
+docker-compose.yaml
 *.log
 *.pyc
 *.swp
