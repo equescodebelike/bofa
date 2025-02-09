@@ -18,5 +18,20 @@ Router _$UserServiceRouter(UserService service) {
     r'/users/<userId>',
     service.fetchUser,
   );
+  router.add(
+    'POST',
+    r'/users/',
+    service.createUser,
+  );
+  router.add(
+    'PUT',
+    r'/users/<userId>',
+    service.updateUser,
+  );
+  router.add(
+    'DELETE',
+    r'/users/<userId>',
+    service.deleteUser,
+  );
   return router;
 }
