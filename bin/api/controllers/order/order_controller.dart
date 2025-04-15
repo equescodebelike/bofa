@@ -4,6 +4,7 @@ import 'package:postgres/postgres.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
 import '../../../misc/misc.dart';
+import '../../../models/order_dto.dart';
 
 part 'order_controller.g.dart';
 
@@ -16,7 +17,21 @@ class OrderService {
     );
     final result = await connection.execute('SELECT * FROM "Order" LIMIT 50');
     await connection.close();
-    return Response.ok(_jsonEncode(result), headers: jsonHeaders);
+    
+    // Convert database results to OrderDto objects
+    final orders = result.map((row) {
+      // Convert ResultRow to Map<String, dynamic>
+      final Map<String, dynamic> orderMap = Map<String, dynamic>.from(row.toColumnMap());
+      return OrderDto.fromJson(orderMap).toJson();
+    }).toList();
+    
+    // Return structured response
+    final responseData = {
+      'orders': orders,
+      'total': orders.length
+    };
+    
+    return Response.ok(_jsonEncode(responseData), headers: jsonHeaders);
   }
 
   @Route.get('/orders/<orderId>')
@@ -36,8 +51,15 @@ class OrderService {
         body: 'Order not found',
       );
     }
+    
+    // Convert ResultRow to Map<String, dynamic>
+    final Map<String, dynamic> orderMap = Map<String, dynamic>.from(result.first.toColumnMap());
+    
+    // Convert to OrderDto
+    final order = OrderDto.fromJson(orderMap).toJson();
+    
     await connection.close();
-    return Response.ok(_jsonEncode(result.first), headers: jsonHeaders);
+    return Response.ok(_jsonEncode(order), headers: jsonHeaders);
   }
 
   @Route.post('/orders/')

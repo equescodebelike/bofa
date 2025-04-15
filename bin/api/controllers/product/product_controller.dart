@@ -4,6 +4,7 @@ import 'package:postgres/postgres.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
 import '../../../misc/misc.dart';
+import '../../../models/product_dto.dart';
 
 part 'product_controller.g.dart';
 
@@ -16,7 +17,21 @@ class ProductService {
     );
     final result = await connection.execute('SELECT * FROM "Product" LIMIT 50');
     connection.close();
-    return Response.ok(_jsonEncode(result), headers: jsonHeaders);
+    
+    // Convert database results to ProductDto objects
+    final products = result.map((row) {
+      // Convert ResultRow to Map<String, dynamic>
+      final Map<String, dynamic> productMap = Map<String, dynamic>.from(row.toColumnMap());
+      return ProductDto.fromJson(productMap).toJson();
+    }).toList();
+    
+    // Return structured response
+    final responseData = {
+      'products': products,
+      'total': products.length
+    };
+    
+    return Response.ok(_jsonEncode(responseData), headers: jsonHeaders);
   }
 
   @Route.get('/products/<productId>')
@@ -36,8 +51,15 @@ class ProductService {
         body: 'Product not found',
       );
     }
+    
+    // Convert ResultRow to Map<String, dynamic>
+    final Map<String, dynamic> productMap = Map<String, dynamic>.from(result.first.toColumnMap());
+    
+    // Convert to ProductDto
+    final product = ProductDto.fromJson(productMap).toJson();
+    
     await connection.close();
-    return Response.ok(_jsonEncode(result.first), headers: jsonHeaders);
+    return Response.ok(_jsonEncode(product), headers: jsonHeaders);
   }
 
   @Route.post('/products/')
