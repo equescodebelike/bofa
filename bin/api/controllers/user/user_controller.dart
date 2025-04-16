@@ -4,6 +4,7 @@ import 'package:postgres/postgres.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
 import '../../../misc/misc.dart';
+import '../../../models/user_dto.dart';
 
 part 'user_controller.g.dart';
 
@@ -18,7 +19,21 @@ class UserService {
       'SELECT * FROM "User" LIMIT 50',
     );
     await connection.close();
-    return Response.ok(_jsonEncode(result), headers: jsonHeaders);
+    
+    // Convert database results to UserDto objects
+    final users = result.map((row) {
+      // Convert ResultRow to Map<String, dynamic>
+      final Map<String, dynamic> userMap = Map<String, dynamic>.from(row.toColumnMap());
+      return UserDto.fromJson(userMap).toJson();
+    }).toList();
+    
+    // Return structured response
+    final responseData = {
+      'users': users,
+      'total': users.length
+    };
+    
+    return Response.ok(_jsonEncode(responseData), headers: jsonHeaders);
   }
 
   @Route.get('/users/<userId>')
@@ -40,8 +55,15 @@ class UserService {
         body: 'Not found',
       );
     }
+    
+    // Convert ResultRow to Map<String, dynamic>
+    final Map<String, dynamic> userMap = Map<String, dynamic>.from(result.first.toColumnMap());
+    
+    // Convert to UserDto
+    final user = UserDto.fromJson(userMap).toJson();
+    
     await connection.close();
-    return Response.ok(_jsonEncode(result.first), headers: jsonHeaders);
+    return Response.ok(_jsonEncode(user), headers: jsonHeaders);
   }
 
   @Route.post('/users/')
