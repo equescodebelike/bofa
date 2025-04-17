@@ -5,6 +5,7 @@ import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
 import '../../../misc/misc.dart';
 import '../../../models/product_dto.dart';
+import '../../../models/product_list_dto.dart';
 
 part 'product_controller.g.dart';
 
@@ -27,8 +28,7 @@ class ProductService {
     
     // Return structured response
     final responseData = {
-      'products': products,
-      'total': products.length
+      'products': products
     };
     
     return Response.ok(_jsonEncode(responseData), headers: jsonHeaders);
@@ -147,14 +147,22 @@ class ProductService {
       return ProductDto.fromJson(productMap).toJson();
     }).toList();
     
-    // Return structured response
-    final responseData = {
-      'products': products,
-      'total': products.length
-    };
+    // Group products by category
+    final Map<String, List<Map<String, dynamic>>> productsByCategory = {};
+    
+    for (var product in products) {
+      final category = product['category'] ?? 'uncategorized';
+      if (!productsByCategory.containsKey(category)) {
+        productsByCategory[category] = [];
+      }
+      productsByCategory[category]!.add(product);
+    }
+    
+    // Create ProductListDto with the grouped products
+    final productListDto = ProductListDto(products: productsByCategory);
     
     await connection.close();
-    return Response.ok(_jsonEncode(responseData), headers: jsonHeaders);
+    return Response.ok(_jsonEncode(productListDto.toJson()), headers: jsonHeaders);
   }
 
   String _jsonEncode(Object? data) =>

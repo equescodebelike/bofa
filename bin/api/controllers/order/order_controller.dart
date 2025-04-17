@@ -27,8 +27,7 @@ class OrderService {
     
     // Return structured response
     final responseData = {
-      'orders': orders,
-      'total': orders.length
+      'orders': orders
     };
     
     return Response.ok(_jsonEncode(responseData), headers: jsonHeaders);

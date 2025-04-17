@@ -29,8 +29,7 @@ class UserService {
     
     // Return structured response
     final responseData = {
-      'users': users,
-      'total': users.length
+      'users': users
     };
     
     return Response.ok(_jsonEncode(responseData), headers: jsonHeaders);
