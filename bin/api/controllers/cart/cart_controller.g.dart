@@ -10,12 +10,12 @@ Router _$CartServiceRouter(CartService service) {
   final router = Router();
   router.add(
     'GET',
-    r'/cart/user/<userId>',
+    r'/cart/',
     service.getUserCart,
   );
   router.add(
     'DELETE',
-    r'/cart/product/<productId>',
+    r'/cart/item/<productId>/',
     service.deleteFromCart,
   );
   router.add(
@@ -25,7 +25,7 @@ Router _$CartServiceRouter(CartService service) {
   );
   router.add(
     'PUT',
-    r'/cart/product/<productId>/inc/<size>',
+    r'/cart/item/<productId>/<size>/',
     service.incCount,
   );
   return router;

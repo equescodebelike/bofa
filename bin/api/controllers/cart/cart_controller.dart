@@ -4,24 +4,22 @@ import 'package:postgres/postgres.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
 import '../../../misc/misc.dart';
-import '../../../models/order_part_dto.dart';
-import '../../../models/order_dto.dart';
-import '../../../models/product_add_to_cart_dto.dart';
-import '../../../models/order_part_list_dto.dart';
 
 part 'cart_controller.g.dart';
 
 class CartService {
-  @Route.get('/cart/user/<userId>')
-  Future<Response> getUserCart(Request request, String userId) async {
+  @Route.get('/cart/')
+  Future<Response> getUserCart(Request request) async {
     var connection = await Connection.open(
       endPoint,
       settings: settings,
     );
     
     try {
-      // First, find the active order for the user
-      final userIdInt = int.parse(userId);
+      // For demonstration purposes, we'll use a fixed user ID
+      // In a real application, this would come from authentication
+      final userIdInt = 1; // Example user ID
+      
       final orderResult = await connection.execute(
         Sql.named('SELECT * FROM "Order" WHERE customer_id = @userId AND status = \'active\' LIMIT 1'),
         parameters: {'userId': userIdInt},
@@ -30,35 +28,65 @@ class CartService {
       if (orderResult.isEmpty) {
         // No active order found
         await connection.close();
-        return Response.ok(_jsonEncode({'order_parts': []}), headers: jsonHeaders);
+        return Response.ok(_jsonEncode({
+          'items': [],
+          'sum': 0.0
+        }), headers: jsonHeaders);
       }
       
-      final orderId = orderResult.first['order_id'] as int;
+      // Convert ResultRow to Map<String, dynamic>
+      final Map<String, dynamic> orderMap = Map<String, dynamic>.from(orderResult.first.toColumnMap());
+      final orderId = int.parse(orderMap['order_id'].toString());
       
-      // Get all order parts for this order
+      // Get all order parts for this order with product information to calculate sum
       final orderPartsResult = await connection.execute(
-        Sql.named('SELECT * FROM "OrderPart" WHERE order_id = @orderId'),
+        Sql.named('''
+          SELECT op.*, p.price 
+          FROM "OrderPart" op 
+          JOIN "Product" p ON op.product_id = p.product_id 
+          WHERE op.order_id = @orderId
+        '''),
         parameters: {'orderId': orderId},
       );
       
-      // Convert database results to OrderPartDto objects
-      final orderParts = orderPartsResult.map((row) {
-        final Map<String, dynamic> orderPartMap = Map<String, dynamic>.from(row.toColumnMap());
-        return OrderPartDto.fromJson(orderPartMap).toJson();
+      // Calculate total sum
+      double totalSum = 0.0;
+      
+      // Convert database results to OrderPartMainInfo objects
+      final items = orderPartsResult.map((row) {
+        final Map<String, dynamic> rowMap = Map<String, dynamic>.from(row.toColumnMap());
+        
+        // Calculate item price and add to total
+        final price = double.parse(rowMap['price']?.toString() ?? '0.0');
+        final size = int.parse(rowMap['count']?.toString() ?? '0');
+        totalSum += price * size;
+        
+        // Convert to client-side format
+        return {
+          'productId': int.parse(rowMap['product_id']?.toString() ?? '0'),
+          'size': size,
+          'orderPartId': int.parse(rowMap['order_part_id']?.toString() ?? '0'),
+          'status': rowMap['status'] ?? 'pending',
+          'updatedAt': DateTime.now().toIso8601String(),
+          'orderedAt': DateTime.now().toIso8601String(),
+        };
       }).toList();
       
-      // Create response DTO
-      final orderPartListDto = OrderPartListDto(orderParts: orderParts);
+      // Create response in client-side format
+      final response = {
+        'items': items,
+        'sum': totalSum
+      };
       
       await connection.close();
-      return Response.ok(_jsonEncode(orderPartListDto.toJson()), headers: jsonHeaders);
+      return Response.ok(_jsonEncode(response), headers: jsonHeaders);
     } catch (e) {
       await connection.close();
-      return Response(500, body: 'Error getting cart: $e');
+      return Response(500, body: _jsonEncode({'message': 'Error getting cart: $e'}), headers: jsonHeaders);
     }
   }
 
-  @Route.delete('/cart/product/<productId>')
+  @Route.delete('/cart/item/<productId>/')
   Future<Response> deleteFromCart(Request request, String productId) async {
     var connection = await Connection.open(
       endPoint,
@@ -66,18 +94,39 @@ class CartService {
     );
     
     try {
-      // Delete the order part with the given product ID
+      // For demonstration purposes, we'll use a fixed user ID
+      final userIdInt = 1; // Example user ID
       final productIdInt = int.parse(productId);
+      
+      // Find the active order for this user
+      final orderResult = await connection.execute(
+        Sql.named('SELECT * FROM "Order" WHERE customer_id = @userId AND status = \'active\' LIMIT 1'),
+        parameters: {'userId': userIdInt},
+      );
+      
+      if (orderResult.isEmpty) {
+        await connection.close();
+        return Response(404, body: _jsonEncode({'message': 'No active cart found'}), headers: jsonHeaders);
+      }
+      
+      // Convert ResultRow to Map<String, dynamic>
+      final Map<String, dynamic> orderMap = Map<String, dynamic>.from(orderResult.first.toColumnMap());
+      final orderId = int.parse(orderMap['order_id'].toString());
+      
+      // Delete the order part with the given product ID for this specific order
       await connection.execute(
-        Sql.named('DELETE FROM "OrderPart" WHERE product_id = @productId'),
-        parameters: {'productId': productIdInt},
+        Sql.named('DELETE FROM "OrderPart" WHERE product_id = @productId AND order_id = @orderId'),
+        parameters: {
+          'productId': productIdInt,
+          'orderId': orderId
+        },
       );
       
       await connection.close();
-      return Response.ok('Product removed from cart', headers: jsonHeaders);
+      return Response.ok(_jsonEncode({'message': 'Product removed from cart'}), headers: jsonHeaders);
     } catch (e) {
       await connection.close();
-      return Response(500, body: 'Error removing product from cart: $e');
+      return Response(500, body: _jsonEncode({'message': 'Error removing product from cart: $e'}), headers: jsonHeaders);
     }
   }
 
@@ -85,7 +134,17 @@ class CartService {
   Future<Response> addToCart(Request request) async {
     final body = await request.readAsString();
     final data = jsonDecode(body) as Map<String, dynamic>;
-    final productAddToCartDto = ProductAddToCartDto.fromJson(data);
+    
+    // Validate required fields
+    if (!data.containsKey('productId') || !data.containsKey('size')) {
+      return Response(400, body: _jsonEncode({'message': 'Missing required fields: productId and size'}), headers: jsonHeaders);
+    }
+    
+    final productId = int.parse(data['productId'].toString());
+    final size = int.parse(data['size'].toString());
+    
+    // For demonstration purposes, we'll use a fixed user ID
+    final userIdInt = 1; // Example user ID
     
     var connection = await Connection.open(
       endPoint,
@@ -96,7 +155,7 @@ class CartService {
       // First, check if the user has an active order
       final orderResult = await connection.execute(
         Sql.named('SELECT * FROM "Order" WHERE customer_id = @userId AND status = \'active\' LIMIT 1'),
-        parameters: {'userId': productAddToCartDto.userId},
+        parameters: {'userId': userIdInt},
       );
       
       int orderId;
@@ -108,13 +167,15 @@ class CartService {
           Sql.named('INSERT INTO "Order" (order_date, customer_id, address, status) VALUES (@orderDate, @customerId, \'\', \'active\') RETURNING order_id'),
           parameters: {
             'orderDate': now,
-            'customerId': productAddToCartDto.userId,
+            'customerId': userIdInt,
           },
         );
         
-        orderId = (insertOrderResult.first['order_id'] as int?) ?? 0;
+        final Map<String, dynamic> insertOrderMap = Map<String, dynamic>.from(insertOrderResult.first.toColumnMap());
+        orderId = int.parse(insertOrderMap['order_id'].toString());
       } else {
-        orderId = (orderResult.first['order_id'] as int?) ?? 0;
+        final Map<String, dynamic> orderMap = Map<String, dynamic>.from(orderResult.first.toColumnMap());
+        orderId = int.parse(orderMap['order_id'].toString());
       }
       
       // Check if the product is already in the cart
@@ -122,44 +183,44 @@ class CartService {
         Sql.named('SELECT * FROM "OrderPart" WHERE order_id = @orderId AND product_id = @productId LIMIT 1'),
         parameters: {
           'orderId': orderId,
-          'productId': productAddToCartDto.productId,
+          'productId': productId,
         },
       );
       
       if (existingOrderPartResult.isNotEmpty) {
         // Update the existing order part
-        final existingOrderPart = existingOrderPartResult.first;
-        final currentCount = (existingOrderPart['count'] as int?) ?? 0;
-        final newCount = currentCount + productAddToCartDto.count;
+        final Map<String, dynamic> existingOrderPartMap = Map<String, dynamic>.from(existingOrderPartResult.first.toColumnMap());
+        final currentSize = int.parse(existingOrderPartMap['count']?.toString() ?? '0');
+        final newSize = currentSize + size;
         
         await connection.execute(
-          Sql.named('UPDATE "OrderPart" SET count = @count WHERE order_part_id = @orderPartId'),
+          Sql.named('UPDATE "OrderPart" SET count = @size WHERE order_part_id = @orderPartId'),
           parameters: {
-            'count': newCount,
-            'orderPartId': existingOrderPart['order_part_id'],
+            'size': newSize,
+            'orderPartId': int.parse(existingOrderPartMap['order_part_id'].toString()),
           },
         );
       } else {
         // Create a new order part
         await connection.execute(
-          Sql.named('INSERT INTO "OrderPart" (product_id, count, order_id, status) VALUES (@productId, @count, @orderId, \'pending\')'),
+          Sql.named('INSERT INTO "OrderPart" (product_id, count, order_id, status) VALUES (@productId, @size, @orderId, \'pending\')'),
           parameters: {
-            'productId': productAddToCartDto.productId,
-            'count': productAddToCartDto.count,
+            'productId': productId,
+            'size': size,
             'orderId': orderId,
           },
         );
       }
       
       await connection.close();
-      return Response.ok('Product added to cart', headers: jsonHeaders);
+      return Response.ok(_jsonEncode({'message': 'Product added to cart'}), headers: jsonHeaders);
     } catch (e) {
       await connection.close();
-      return Response(500, body: 'Error adding product to cart: $e');
+      return Response(500, body: _jsonEncode({'message': 'Error adding product to cart: $e'}), headers: jsonHeaders);
     }
   }
 
-  @Route.put('/cart/product/<productId>/inc/<size>')
+  @Route.put('/cart/item/<productId>/<size>/')
   Future<Response> incCount(Request request, String productId, String size) async {
     var connection = await Connection.open(
       endPoint,
@@ -167,38 +228,59 @@ class CartService {
     );
     
     try {
-      // Find the order part with the given product ID
+      // For demonstration purposes, we'll use a fixed user ID
+      final userIdInt = 1; // Example user ID
       final productIdInt = int.parse(productId);
       final sizeInt = int.parse(size);
       
+      // Find the active order for this user
+      final orderResult = await connection.execute(
+        Sql.named('SELECT * FROM "Order" WHERE customer_id = @userId AND status = \'active\' LIMIT 1'),
+        parameters: {'userId': userIdInt},
+      );
+      
+      if (orderResult.isEmpty) {
+        await connection.close();
+        return Response(404, body: _jsonEncode({'message': 'No active cart found'}), headers: jsonHeaders);
+      }
+      
+      // Convert ResultRow to Map<String, dynamic>
+      final Map<String, dynamic> orderMap = Map<String, dynamic>.from(orderResult.first.toColumnMap());
+      final orderId = int.parse(orderMap['order_id'].toString());
+      
+      // Find the order part with the given product ID for this specific order
       final orderPartResult = await connection.execute(
-        Sql.named('SELECT * FROM "OrderPart" WHERE product_id = @productId LIMIT 1'),
-        parameters: {'productId': productIdInt},
+        Sql.named('SELECT * FROM "OrderPart" WHERE product_id = @productId AND order_id = @orderId LIMIT 1'),
+        parameters: {
+          'productId': productIdInt,
+          'orderId': orderId
+        },
       );
       
       if (orderPartResult.isEmpty) {
         await connection.close();
-        return Response(404, body: 'Product not found in cart');
+        return Response(404, body: _jsonEncode({'message': 'Product not found in cart'}), headers: jsonHeaders);
       }
       
-      final orderPart = orderPartResult.first;
-      final currentCount = (orderPart['count'] as int?) ?? 0;
-      final newCount = currentCount + sizeInt;
+      // Convert ResultRow to Map<String, dynamic>
+      final Map<String, dynamic> orderPartMap = Map<String, dynamic>.from(orderPartResult.first.toColumnMap());
+      final currentSize = int.parse(orderPartMap['count']?.toString() ?? '0');
+      final newSize = currentSize + sizeInt;
       
-      // Update the count
+      // Update the count (size)
       await connection.execute(
-        Sql.named('UPDATE "OrderPart" SET count = @count WHERE order_part_id = @orderPartId'),
+        Sql.named('UPDATE "OrderPart" SET count = @size WHERE order_part_id = @orderPartId'),
         parameters: {
-          'count': newCount,
-          'orderPartId': orderPart['order_part_id'],
+          'size': newSize,
+          'orderPartId': int.parse(orderPartMap['order_part_id'].toString()),
         },
       );
       
       await connection.close();
-      return Response.ok('Product count updated', headers: jsonHeaders);
+      return Response.ok(_jsonEncode({'message': 'Product count updated'}), headers: jsonHeaders);
     } catch (e) {
       await connection.close();
-      return Response(500, body: 'Error updating product count: $e');
+      return Response(500, body: _jsonEncode({'message': 'Error updating product count: $e'}), headers: jsonHeaders);
     }
   }
 
