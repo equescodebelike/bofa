@@ -28,8 +28,7 @@ class OrderPartService {
     
     // Return structured response
     final responseData = {
-      'order_parts': orderParts,
-      'total': orderParts.length
+      'order_parts': orderParts
     };
     
     return Response.ok(_jsonEncode(responseData), headers: jsonHeaders);

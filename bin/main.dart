@@ -21,6 +21,7 @@ void main() async {
   final productService = ProductService();
   final orderService = OrderService();
   final orderPartService = OrderPartService();
+  final cartService = CartService();
   final cascade = Cascade()
       .add(
         userService.router.call,
@@ -33,6 +34,9 @@ void main() async {
       )
       .add(
         orderPartService.router.call,
+      )
+      .add(
+        cartService.router.call,
       );
 
   final handler = const Pipeline().addMiddleware(fixCORS).addHandler(
