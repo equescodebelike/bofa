@@ -33,5 +33,10 @@ Router _$ProductServiceRouter(ProductService service) {
     r'/products/<productId>',
     service.deleteProduct,
   );
+  router.add(
+    'GET',
+    r'/products/user/<userId>',
+    service.fetchProductsByUserId,
+  );
   return router;
 }

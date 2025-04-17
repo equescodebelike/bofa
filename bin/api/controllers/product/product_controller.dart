@@ -72,7 +72,7 @@ class ProductService {
     final data = jsonDecode(body) as Map<String, dynamic>;
     await connection.execute(
       Sql.named(
-          'INSERT INTO "Product" (name, email, units, mn_step, cost, user_id, image_url) VALUES (@name, @email, @units, @mn_step, @cost, @user_id, @image_url)'),
+          'INSERT INTO "Product" (name, email, units, mn_step, cost, user_id, image_url, category) VALUES (@name, @email, @units, @mn_step, @cost, @user_id, @image_url, @category)'),
       parameters: {
         'name': data['name'],
         'email': data['email'],
@@ -81,6 +81,7 @@ class ProductService {
         'cost': data['cost'],
         'user_id': data['user_id'],
         'image_url': data['image_url'],
+        'category': data['category'],
       },
     );
     await connection.close();
@@ -97,7 +98,7 @@ class ProductService {
     final data = jsonDecode(body) as Map<String, dynamic>;
     await connection.execute(
       Sql.named(
-          'UPDATE "Product" SET name = @name, email = @email, units = @units, mn_step = @mn_step, cost = @cost, user_id = @user_id, image_url = @image_url WHERE product_id = @productId'),
+          'UPDATE "Product" SET name = @name, email = @email, units = @units, mn_step = @mn_step, cost = @cost, user_id = @user_id, image_url = @image_url, category = @category WHERE product_id = @productId'),
       parameters: {
         'productId': int.parse(productId),
         'name': data['name'],
@@ -107,6 +108,7 @@ class ProductService {
         'cost': data['cost'],
         'user_id': data['user_id'],
         'image_url': data['image_url'],
+        'category': data['category'],
       },
     );
     await connection.close();
@@ -125,6 +127,34 @@ class ProductService {
     );
     await connection.close();
     return Response.ok('Product deleted', headers: jsonHeaders);
+  }
+
+  @Route.get('/products/user/<userId>')
+  Future<Response> fetchProductsByUserId(Request request, String userId) async {
+    var connection = await Connection.open(
+      endPoint,
+      settings: settings,
+    );
+    final result = await connection.execute(
+      Sql.named('SELECT * FROM "Product" WHERE user_id = @userId'),
+      parameters: {'userId': int.parse(userId)},
+    );
+    
+    // Convert database results to ProductDto objects
+    final products = result.map((row) {
+      // Convert ResultRow to Map<String, dynamic>
+      final Map<String, dynamic> productMap = Map<String, dynamic>.from(row.toColumnMap());
+      return ProductDto.fromJson(productMap).toJson();
+    }).toList();
+    
+    // Return structured response
+    final responseData = {
+      'products': products,
+      'total': products.length
+    };
+    
+    await connection.close();
+    return Response.ok(_jsonEncode(responseData), headers: jsonHeaders);
   }
 
   String _jsonEncode(Object? data) =>

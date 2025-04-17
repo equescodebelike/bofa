@@ -7,6 +7,7 @@ class ProductDto {
   final double cost;
   final int userId;
   final String? imageUrl;
+  final String? category;
   
   ProductDto({
     this.productId,
@@ -17,6 +18,7 @@ class ProductDto {
     required this.cost,
     required this.userId,
     this.imageUrl,
+    this.category,
   });
   
   factory ProductDto.fromJson(Map<String, dynamic> json) {
@@ -67,6 +69,7 @@ class ProductDto {
       cost: parsedCost,
       userId: parsedUserId,
       imageUrl: json['image_url'],
+      category: json['category'],
     );
   }
   
@@ -80,6 +83,7 @@ class ProductDto {
       'cost': cost,
       'user_id': userId,
       if (imageUrl != null) 'image_url': imageUrl,
+      if (category != null) 'category': category,
     };
   }
 }
