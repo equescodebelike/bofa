@@ -3,7 +3,7 @@ class UserDto {
   final String name;
   final String email;
   final bool isActive;
-  final String password;
+  final String? password;
   final String? phoneNumber;
   final String? imageUrl;
   final List<String?>? categories;
@@ -13,7 +13,7 @@ class UserDto {
     required this.name,
     required this.email,
     required this.isActive,
-    required this.password,
+    this.password,
     this.phoneNumber,
     this.imageUrl,
     this.categories,
@@ -54,7 +54,7 @@ class UserDto {
       name: json['name'] ?? '',
       email: json['email'] ?? '',
       isActive: parsedIsActive,
-      password: json['password'] ?? '',
+      password: json['password'],
       phoneNumber: json['phone_number'],
       imageUrl: json['image_url'],
       categories: parsedCategories,
@@ -67,7 +67,7 @@ class UserDto {
       'name': name,
       'email': email,
       'is_active': isActive,
-      'password': password,
+      if (password != null) 'password': password,
       if (phoneNumber != null) 'phone_number': phoneNumber,
       if (imageUrl != null) 'image_url': imageUrl,
       if (categories != null) 'categories': categories,
