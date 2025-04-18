@@ -73,19 +73,46 @@ class UserService {
     );
     final body = await request.readAsString();
     final data = jsonDecode(body) as Map<String, dynamic>;
+    // Build SQL query dynamically based on provided fields
+    final List<String> fields = ['name', 'email', 'is_active'];
+    final List<String> placeholders = ['@name', '@email', '@is_active'];
+    final Map<String, dynamic> parameters = {
+      'name': data['name'],
+      'email': data['email'],
+      'is_active': data['is_active'],
+    };
+    
+    // Add optional fields if they exist
+    if (data['phone_number'] != null) {
+      fields.add('phone_number');
+      placeholders.add('@phone_number');
+      parameters['phone_number'] = data['phone_number'];
+    }
+    
+    if (data['image_url'] != null) {
+      fields.add('image_url');
+      placeholders.add('@image_url');
+      parameters['image_url'] = data['image_url'];
+    }
+    
+    if (data['categories'] != null) {
+      fields.add('categories');
+      placeholders.add('@categories');
+      parameters['categories'] = data['categories'];
+    }
+    
+    // Only include password if it's provided
+    if (data['password'] != null) {
+      fields.add('password');
+      placeholders.add('@password');
+      parameters['password'] = data['password'];
+    }
+    
+    final query = 'INSERT INTO "User" (${fields.join(', ')}) VALUES (${placeholders.join(', ')})';
+    
     await connection.execute(
-      Sql.named(
-        'INSERT INTO "User" (name, email, is_active, password, phone_number, image_url, categories) VALUES (@name, @email, @is_active, @password, @phone_number, @image_url, @categories)',
-      ),
-      parameters: {
-        'name': data['name'],
-        'email': data['email'],
-        'is_active': data['is_active'],
-        'password': data['password'],
-        'phone_number': data['phone_number'],
-        'image_url': data['image_url'],
-        'categories': data['categories'],
-      },
+      Sql.named(query),
+      parameters: parameters,
     );
     await connection.close();
     return Response.ok('User created', headers: jsonHeaders);
@@ -99,20 +126,43 @@ class UserService {
     );
     final body = await request.readAsString();
     final data = jsonDecode(body) as Map<String, dynamic>;
+    
+    // Build SET clause and parameters dynamically
+    final List<String> setClauses = ['name = @name', 'email = @email', 'is_active = @is_active'];
+    final Map<String, dynamic> parameters = {
+      'userId': int.parse(userId),
+      'name': data['name'],
+      'email': data['email'],
+      'is_active': data['is_active'],
+    };
+    
+    // Add optional fields if they exist
+    if (data['phone_number'] != null) {
+      setClauses.add('phone_number = @phone_number');
+      parameters['phone_number'] = data['phone_number'];
+    }
+    
+    if (data['image_url'] != null) {
+      setClauses.add('image_url = @image_url');
+      parameters['image_url'] = data['image_url'];
+    }
+    
+    if (data['categories'] != null) {
+      setClauses.add('categories = @categories');
+      parameters['categories'] = data['categories'];
+    }
+    
+    // Only include password if it's provided
+    if (data['password'] != null) {
+      setClauses.add('password = @password');
+      parameters['password'] = data['password'];
+    }
+    
+    final query = 'UPDATE "User" SET ${setClauses.join(', ')} WHERE user_id = @userId';
+    
     await connection.execute(
-      Sql.named(
-        'UPDATE "User" SET name = @name, email = @email, is_active = @is_active, password = @password, phone_number = @phone_number, image_url = @image_url, categories = @categories WHERE user_id = @userId',
-      ),
-      parameters: {
-        'userId': int.parse(userId),
-        'name': data['name'],
-        'email': data['email'],
-        'is_active': data['is_active'],
-        'password': data['password'],
-        'phone_number': data['phone_number'],
-        'image_url': data['image_url'],
-        'categories': data['categories'],
-      },
+      Sql.named(query),
+      parameters: parameters,
     );
     await connection.close();
     return Response.ok('User updated', headers: jsonHeaders);
