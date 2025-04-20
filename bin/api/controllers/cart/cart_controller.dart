@@ -21,7 +21,7 @@ class CartService {
       final userIdInt = 1; // Example user ID
       
       final orderResult = await connection.execute(
-        Sql.named('SELECT * FROM "Order" WHERE customer_id = @userId AND status = \'active\' LIMIT 1'),
+        Sql.named('SELECT * FROM "Order" WHERE customer_id = @userId LIMIT 1'),
         parameters: {'userId': userIdInt},
       );
       
@@ -66,7 +66,6 @@ class CartService {
           'productId': int.parse(rowMap['product_id']?.toString() ?? '0'),
           'size': size,
           'orderPartId': int.parse(rowMap['order_part_id']?.toString() ?? '0'),
-          'status': rowMap['status'] ?? 'pending',
           'updatedAt': DateTime.now().toIso8601String(),
           'orderedAt': DateTime.now().toIso8601String(),
         };
@@ -100,7 +99,7 @@ class CartService {
       
       // Find the active order for this user
       final orderResult = await connection.execute(
-        Sql.named('SELECT * FROM "Order" WHERE customer_id = @userId AND status = \'active\' LIMIT 1'),
+        Sql.named('SELECT * FROM "Order" WHERE customer_id = @userId LIMIT 1'),
         parameters: {'userId': userIdInt},
       );
       
@@ -154,7 +153,7 @@ class CartService {
     try {
       // First, check if the user has an active order
       final orderResult = await connection.execute(
-        Sql.named('SELECT * FROM "Order" WHERE customer_id = @userId AND status = \'active\' LIMIT 1'),
+        Sql.named('SELECT * FROM "Order" WHERE customer_id = @userId LIMIT 1'),
         parameters: {'userId': userIdInt},
       );
       
@@ -164,7 +163,7 @@ class CartService {
         // Create a new order for the user
         final now = DateTime.now().toIso8601String();
         final insertOrderResult = await connection.execute(
-          Sql.named('INSERT INTO "Order" (order_date, customer_id, address, status) VALUES (@orderDate, @customerId, \'\', \'active\') RETURNING order_id'),
+          Sql.named('INSERT INTO "Order" (order_date, customer_id, address) VALUES (@orderDate, @customerId, \'\') RETURNING order_id'),
           parameters: {
             'orderDate': now,
             'customerId': userIdInt,
@@ -203,7 +202,7 @@ class CartService {
       } else {
         // Create a new order part
         await connection.execute(
-          Sql.named('INSERT INTO "OrderPart" (product_id, count, order_id, status) VALUES (@productId, @size, @orderId, \'pending\')'),
+          Sql.named('INSERT INTO "OrderPart" (product_id, count, order_id) VALUES (@productId, @size, @orderId)'),
           parameters: {
             'productId': productId,
             'size': size,
@@ -235,7 +234,7 @@ class CartService {
       
       // Find the active order for this user
       final orderResult = await connection.execute(
-        Sql.named('SELECT * FROM "Order" WHERE customer_id = @userId AND status = \'active\' LIMIT 1'),
+        Sql.named('SELECT * FROM "Order" WHERE customer_id = @userId LIMIT 1'),
         parameters: {'userId': userIdInt},
       );
       
