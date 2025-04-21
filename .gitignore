@@ -3,3 +3,5 @@
 .dart_tool/
 email_service.dart
 jwt_util.dart
+key
+key.pub
